@@ -162,12 +162,17 @@ TOOLS = [
             "pnr": {"type": "string"}, "flight_number": {"type": "string"}},
             "required": ["pnr", "flight_number"]}}},
     {"type": "function", "function": {
-        "name": "check_hotel_request",
-        "description": "Check whether a hotel request (full night or delayed-hours) is entitled.",
-        "parameters": {"type": "object", "properties": {
-            "pnr": {"type": "string"}, "flight_number": {"type": "string"},
-            "requesting_full_night": {"type": "boolean"}},
-            "required": ["pnr", "flight_number", "requesting_full_night"]}}},
+    "name": "check_hotel_request",
+    "description": "Check whether a hotel request is entitled. Set "
+        "requesting_full_night=True ONLY if the customer explicitly asks "
+        "for a full night's stay / whole night / overnight accommodation. "
+        "For any generic hotel ask (e.g. 'can I get a hotel', 'since it's "
+        "been such a long delay'), set requesting_full_night=False — this "
+        "correctly checks the 5-hour threshold instead.",
+    "parameters": {"type": "object", "properties": {
+        "pnr": {"type": "string"}, "flight_number": {"type": "string"},
+        "requesting_full_night": {"type": "boolean"}},
+    "required": ["pnr", "flight_number", "requesting_full_night"]}}},
     {"type": "function", "function": {
         "name": "check_fare_difference",
         "description": "Check if a fare-difference amount is within the agent's waiver limit "
