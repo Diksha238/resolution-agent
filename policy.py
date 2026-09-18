@@ -149,10 +149,15 @@ def check_prohibited(action_key: str) -> PolicyResult:
             escalate=True,
             escalation_reason=PROHIBITED_KEYWORDS[action_key],
         )
+    # Fail SAFE, not fail open: an unrecognized action is treated as
+    # requiring escalation rather than silently being allowed.
     return PolicyResult(
-        allowed=True, action=action_key,
-        reason="No prohibition matched.",
+        allowed=False, action=action_key,
+        reason="This request is outside the standard policy and needs "
+               "human review before it can be approved.",
         rule_cited="Allowed vs. Prohibited Actions",
+        escalate=True,
+        escalation_reason=f"Unrecognized/out-of-policy action requested: {action_key}",
     )
 
 

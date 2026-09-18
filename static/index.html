@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Airline Disruption Resolution Agent</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: radial-gradient(ellipse at top, #0f1d3d 0%, #0a1428 55%, #060b18 100%);
+    color: #e7edf7; height: 100vh; display: flex; flex-direction: column;
+  }
+  header {
+    padding: 18px 26px; background: rgba(15, 30, 62, 0.85); backdrop-filter: blur(8px);
+    border-bottom: 1px solid #1e3a63;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  header .title { display: flex; align-items: center; gap: 12px; }
+  header .title .icon {
+    width: 40px; height: 40px; border-radius: 12px;
+    background: linear-gradient(135deg, #1d4ed8, #38bdf8);
+    box-shadow: 0 0 20px rgba(59,130,246,0.4);
+    display: flex; align-items: center; justify-content: center; font-size: 19px;
+  }
+  header h1 { font-size: 17px; margin: 0; font-weight: 700; letter-spacing: 0.01em; }
+  header .subtitle { font-size: 12.5px; color: #7ea3d6; margin-top: 2px; }
+  header a {
+    color: #7dd3fc; font-size: 13px; text-decoration: none; border: 1px solid #1e3a63;
+    padding: 7px 14px; border-radius: 20px; background: rgba(30,58,99,0.4);
+  }
+  header a:hover { background: rgba(56,189,248,0.15); border-color: #38bdf8; }
+
+  #scenarios {
+    display: flex; gap: 9px; padding: 14px 26px; background: rgba(10,20,40,0.6);
+    border-bottom: 1px solid #1e3a63; flex-wrap: wrap; align-items: center;
+  }
+  #scenarios .label { font-size: 12px; color: #5d84bb; margin-right: 4px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
+  #scenarios button {
+    background: linear-gradient(180deg, #16274b, #0f1d3a); border: 1px solid #2c4a7c; color: #93c5fd;
+    padding: 8px 16px; border-radius: 20px; font-size: 13.5px; cursor: pointer;
+    transition: all 0.18s;
+  }
+  #scenarios button:hover { background: linear-gradient(180deg, #1e3a63, #16274b); border-color: #38bdf8; color: #e0f2fe; box-shadow: 0 0 12px rgba(56,189,248,0.25); }
+
+  #chat {
+    flex: 1; overflow-y: auto; padding: 26px; display: flex; flex-direction: column; gap: 18px;
+  }
+  .row { display: flex; gap: 11px; align-items: flex-start; max-width: 78%; }
+  .row.user { align-self: flex-end; flex-direction: row-reverse; }
+  .row.agent { align-self: flex-start; }
+  .avatar {
+    width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; font-size: 17px;
+    margin-top: 2px; box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  }
+  .avatar.agent-avatar { background: linear-gradient(135deg, #1d4ed8, #38bdf8); }
+  .avatar.user-avatar { background: linear-gradient(135deg, #334155, #1e293b); border: 1px solid #3b5678; }
+
+  .msg { padding: 14px 18px; border-radius: 16px; line-height: 1.6; font-size: 15.5px; }
+  .msg.user { background: linear-gradient(135deg, #1d4ed8, #2563eb); color: white; border-bottom-right-radius: 4px; box-shadow: 0 4px 14px rgba(37,99,235,0.3); }
+  .msg.agent { background: #101f3d; border: 1px solid #1e3a63; border-bottom-left-radius: 4px; }
+  .msg p { margin: 0 0 8px 0; }
+  .msg p:last-child { margin-bottom: 0; }
+  .msg ul, .msg ol { margin: 6px 0; padding-left: 20px; }
+  .msg li { margin-bottom: 4px; }
+  .msg strong { color: #7dd3fc; }
+  .msg.user strong { color: #dbeafe; }
+
+  .tags { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 11px; }
+  .policy-tag {
+    font-size: 11.5px; color: #7dd3fc; background: rgba(56,189,248,0.1); border: 1px solid #1e5a8c;
+    padding: 5px 11px; border-radius: 20px; display: inline-flex; align-items: center; gap: 5px;
+  }
+  .escalate-tag {
+    font-size: 11.5px; color: #fca5a5; background: rgba(220,38,38,0.1); border: 1px solid #991b1b;
+    padding: 5px 11px; border-radius: 20px; display: inline-flex; align-items: center; gap: 5px;
+  }
+
+  #inputRow { display: flex; padding: 18px 26px; gap: 12px; background: rgba(15,30,62,0.85); backdrop-filter: blur(8px); border-top: 1px solid #1e3a63; }
+  #inputRow input {
+    flex: 1; padding: 13px 18px; border-radius: 12px; border: 1px solid #2c4a7c;
+    background: #0a1428; color: #e7edf7; font-size: 15px; outline: none;
+    transition: border-color 0.15s;
+  }
+  #inputRow input:focus { border-color: #38bdf8; box-shadow: 0 0 0 3px rgba(56,189,248,0.15); }
+  #inputRow button {
+    background: linear-gradient(135deg, #1d4ed8, #2563eb); color: white; border: none; padding: 13px 26px;
+    border-radius: 12px; cursor: pointer; font-size: 15px; font-weight: 600;
+    box-shadow: 0 4px 14px rgba(37,99,235,0.35);
+  }
+  #inputRow button:hover { background: linear-gradient(135deg, #2563eb, #3b82f6); }
+  #inputRow button:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
+
+  .typing-dots { display: flex; gap: 4px; padding: 4px 0; }
+  .typing-dots span {
+    width: 6px; height: 6px; border-radius: 50%; background: #5d84bb;
+    animation: bounce 1.2s infinite ease-in-out;
+  }
+  .typing-dots span:nth-child(2) { animation-delay: 0.15s; }
+  .typing-dots span:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes bounce { 0%, 60%, 100% { transform: translateY(0); opacity: 0.4; } 30% { transform: translateY(-4px); opacity: 1; } }
+
+  #chat::-webkit-scrollbar { width: 8px; }
+  #chat::-webkit-scrollbar-thumb { background: #1e3a63; border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="title">
+    <div class="icon">✈️</div>
+    <div>
+      <h1>Airline Disruption Resolution Agent</h1>
+      <div class="subtitle">Grounded in the airline's data pack &amp; policy — every decision is rule-cited</div>
+    </div>
+  </div>
+  <a href="/audit" target="_blank">View Audit Log →</a>
+</header>
+
+<div id="scenarios">
+  <span class="label">Try:</span>
+  <button onclick="fill('Hi, my PNR is SK4821X. My flight got cancelled and I am furious. I want a full cash refund plus a free business class upgrade on my return flight for the trouble.')">Scenario 1 · Priya (Gold)</button>
+  <button onclick="fill('Hi, my PNR is TR1190B. My flight is delayed 4 hours and I missed an important meeting. Can I get hotel accommodation since it has been such a long delay?')">Scenario 2 · Arvind (Silver)</button>
+  <button onclick="fill('Hi, my PNR is WL7742. My flight is delayed 6 hours, I want a full night hotel stay, and I also want to move to a different, higher-fare flight instead of waiting — the fare difference is ₹2000.')">Scenario 3 · Meher (Platinum)</button>
+</div>
+
+<div id="chat"></div>
+
+<div id="inputRow">
+  <input id="msgInput" type="text" placeholder="Type a message... (include your PNR)" onkeydown="if(event.key==='Enter')send()">
+  <button id="sendBtn" onclick="send()">Send</button>
+</div>
+
+<script>
+const sessionId = "session-" + Math.random().toString(36).slice(2);
+const chat = document.getElementById('chat');
+const input = document.getElementById('msgInput');
+const sendBtn = document.getElementById('sendBtn');
+
+function fill(text) {
+  input.value = text;
+  input.focus();
+}
+
+function renderMarkdown(text) {
+  const escape = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  let lines = escape(text).split('\n');
+  let html = '';
+  let inList = null;
+
+  function closeList() {
+    if (inList) { html += inList === 'ul' ? '</ul>' : '</ol>'; inList = null; }
+  }
+
+  for (let raw of lines) {
+    let line = raw.trim();
+    if (!line) { closeList(); continue; }
+
+    let bulletMatch = line.match(/^[-*]\s+(.*)/);
+    let numMatch = line.match(/^\d+\.\s+(.*)/);
+
+    if (bulletMatch) {
+      if (inList !== 'ul') { closeList(); html += '<ul>'; inList = 'ul'; }
+      html += '<li>' + inline(bulletMatch[1]) + '</li>';
+    } else if (numMatch) {
+      if (inList !== 'ol') { closeList(); html += '<ol>'; inList = 'ol'; }
+      html += '<li>' + inline(numMatch[1]) + '</li>';
+    } else {
+      closeList();
+      html += '<p>' + inline(line) + '</p>';
+    }
+  }
+  closeList();
+  return html;
+
+  function inline(s) {
+    return s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  }
+}
+
+function addMessage(text, sender) {
+  const row = document.createElement('div');
+  row.className = 'row ' + sender;
+
+  const avatar = document.createElement('div');
+  avatar.className = 'avatar ' + (sender === 'agent' ? 'agent-avatar' : 'user-avatar');
+  avatar.innerText = sender === 'agent' ? '✈️' : '👨';
+  row.appendChild(avatar);
+
+  const bubble = document.createElement('div');
+  bubble.className = 'msg ' + sender;
+
+  let displayText = text;
+  const policyMatch = text.match(/\[\[POLICY:\s*(.+?)\]\]/);
+  const escalated = /escalat/i.test(text);
+  if (policyMatch) displayText = displayText.replace(policyMatch[0], '').trim();
+
+  bubble.innerHTML = renderMarkdown(displayText);
+
+  if (policyMatch || escalated) {
+    const tags = document.createElement('div');
+    tags.className = 'tags';
+    if (policyMatch) {
+      const t = document.createElement('span');
+      t.className = 'policy-tag';
+      t.innerText = '📋 Policy: ' + policyMatch[1];
+      tags.appendChild(t);
+    }
+    if (escalated && sender === 'agent') {
+      const t = document.createElement('span');
+      t.className = 'escalate-tag';
+      t.innerText = '⚠ Escalated to human agent';
+      tags.appendChild(t);
+    }
+    bubble.appendChild(tags);
+  }
+
+  row.appendChild(bubble);
+  chat.appendChild(row);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+async function send() {
+  const text = input.value.trim();
+  if (!text) return;
+  addMessage(text, 'user');
+  input.value = '';
+  sendBtn.disabled = true;
+
+  const typingRow = document.createElement('div');
+  typingRow.className = 'row agent';
+  typingRow.innerHTML = `<div class="avatar agent-avatar">✈️</div>
+    <div class="msg agent"><div class="typing-dots"><span></span><span></span><span></span></div></div>`;
+  chat.appendChild(typingRow);
+  chat.scrollTop = chat.scrollHeight;
+
+  try {
+    const res = await fetch('/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId, message: text })
+    });
+    const data = await res.json();
+    typingRow.remove();
+    addMessage(data.reply || 'No response.', 'agent');
+  } catch (e) {
+    typingRow.remove();
+    addMessage('Error contacting the agent: ' + e.message, 'agent');
+  }
+  sendBtn.disabled = false;
+  input.focus();
+}
+
+addMessage('Hi! I can help with flight cancellations, delays, refunds, and rebooking. Please share your booking reference (PNR) to get started, or try one of the scenario buttons above.', 'agent');
+</script>
+
+</body>
+</html>
