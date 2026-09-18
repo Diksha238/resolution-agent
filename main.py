@@ -41,6 +41,7 @@ app.add_middleware(
 )
 
 AUDIT_LOG = []
+TICKETS: dict[str, dict] = {}   # keyed by PNR
 SESSIONS: dict[str, list] = {}
 
 
@@ -131,7 +132,20 @@ def tool_check_prohibited(pnr: str, action_key: str) -> dict:
     out = r.__dict__
     _log(pnr, f"prohibited_check:{action_key}", out)
     return out
-
+def _create_or_update_ticket(pnr: str, summary: str, actions_taken: list[str], escalated: bool) -> dict:
+    existing = TICKETS.get(pnr)
+    ticket_id = existing["ticket_id"] if existing else f"TCK-{pnr}-{int(datetime.utcnow().timestamp())}"
+    ticket = {
+        "ticket_id": ticket_id,
+        "pnr": pnr,
+        "status": "escalated" if escalated else "resolved",
+        "last_customer_message": summary,
+        "actions_taken": actions_taken,
+        "audit_refs": [e for e in AUDIT_LOG if e["pnr"] == pnr],
+        "last_updated": datetime.utcnow().isoformat(),
+    }
+    TICKETS[pnr] = ticket
+    return ticket
 
 TOOL_IMPLS = {
     "get_booking": tool_get_booking,
@@ -279,15 +293,17 @@ class ChatRequest(BaseModel):
 @app.post("/chat")
 def chat(req: ChatRequest):
     history = SESSIONS.setdefault(req.session_id, [{"role": "system", "content": SYSTEM_PROMPT}])
-
     user_msg = req.message
+
     if detect_legal_threat(user_msg):
-        # Belt-and-braces: force escalation path even if the model misses it.
         tool_escalate("UNKNOWN", "Legal threat / formal complaint detected in customer message.")
 
     history.append({"role": "user", "content": user_msg})
 
-    # Tool-calling loop
+    turn_pnr = None
+    turn_actions: list[str] = []
+    turn_escalated = False
+
     for _ in range(10):
         resp = client.chat.completions.create(
             model=MODEL, messages=history, tools=TOOLS, tool_choice="auto",
@@ -296,17 +312,29 @@ def chat(req: ChatRequest):
         history.append(msg.model_dump(exclude_none=True))
 
         if not msg.tool_calls:
-            return {"reply": msg.content, "audit_log": AUDIT_LOG[-5:]}
+            ticket = None
+            if turn_pnr:
+                ticket = _create_or_update_ticket(turn_pnr, user_msg, turn_actions, turn_escalated)
+            return {"reply": msg.content, "audit_log": AUDIT_LOG[-5:], "ticket": ticket}
 
         for tc in msg.tool_calls:
             fn_name = tc.function.name
             args = json.loads(tc.function.arguments or "{}")
             result = TOOL_IMPLS.get(fn_name, lambda **_: {"error": "unknown tool"})(**args)
+
+            if isinstance(args, dict) and args.get("pnr"):
+                turn_pnr = args["pnr"].strip().upper()
+            turn_actions.append(fn_name)
+            if isinstance(result, dict) and result.get("escalate"):
+                turn_escalated = True
+
             history.append({
                 "role": "tool", "tool_call_id": tc.id,
                 "content": json.dumps(result, default=str),
             })
 
+    if turn_pnr:
+        _create_or_update_ticket(turn_pnr, user_msg, turn_actions, True)
     return {"reply": "I need to escalate this to a human agent to resolve properly.",
             "audit_log": AUDIT_LOG[-5:]}
 
@@ -314,7 +342,16 @@ def chat(req: ChatRequest):
 @app.get("/audit")
 def get_audit():
     return AUDIT_LOG
+@app.get("/ticket/{pnr}")
+def get_ticket(pnr: str):
+    ticket = TICKETS.get(pnr.strip().upper())
+    if not ticket:
+        return {"error": "No ticket found for that PNR."}
+    return ticket
 
+@app.get("/tickets")
+def get_all_tickets():
+    return list(TICKETS.values())
 
 @app.get("/", response_class=HTMLResponse)
 def index():
